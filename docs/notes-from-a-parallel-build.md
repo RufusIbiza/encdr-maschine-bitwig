@@ -351,7 +351,16 @@ Happy to expand on any of these, or to be told they do not apply — I am workin
 from a read of the repository, not from running it.
 
 **Reference:** <https://github.com/Witzman/Generative-Techno-ZynthianMaschine-MKII>
-— Maschine MK2 + Zynthian, Rust HID daemon plus a Python control-surface driver.
-The page-ring/shape model (item 1), the state re-read on load (item 2), the
-deferred-work pattern (item 4) and the testable logic module (item 5) are all
-implemented there if a concrete reading is more useful than a description.
+— Maschine MK2 + Zynthian, Rust HID daemon (`daemon/`) plus a Python
+control-surface driver (`ctrldev/`). GPL-3.0.
+
+If a concrete reading is more useful than a description, these are the exact
+places the items above are implemented:
+
+| Item | Where |
+|---|---|
+| **1** — page rings and the shape model | `ctrldev/techno_lib.py` — `PAGE_RINGS` table, `page_desc(shape, …)`, and the `SHAPE_SPREAD` / `SHAPE_GLOBAL` branches of the render path. `generated_pages()` is the "build pages from whatever the plugin publishes" part |
+| **2** — re-read host state on load | `ctrldev/zynthian_ctrldev_maschine_mk2.py` — `_derive_params()`, wired to the `SS_LOAD_SNAPSHOT` signal. The play-chance/swing read-back described above is inside it |
+| **4** — defer slow work off the event thread | `ctrldev/zynthian_ctrldev_maschine_mk2.py` — `_commit_kit()` and `_commit_preset()`. Both are called from a poll thread; the MIDI handler only records the intent |
+| **5** — testable logic module | `ctrldev/techno_lib.py` + `ctrldev/maschine_mk2_lib.py`, tested by `ctrldev/tests/`. These run with no hardware and no Zynthian present |
+| **8** — ownership and pattern handback | `ctrldev/zynthian_ctrldev_maschine_mk2.py` — `_write_voice_pattern()` returns early when the player owns the pattern |

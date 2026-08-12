@@ -79,7 +79,10 @@ After saving the file, reload the rules:
 sudo udevadm control --reload-rules
 sudo udevadm trigger
 ```
-If you are using the WebView screens (`encdr-view`), you also need to install the associated system dependencies. On Debian/Ubuntu based systems:
+
+You will also need to install the associated system dependencies to enable the webview-based. 
+
+On Debian/Ubuntu based systems:
 ```bash
 sudo apt install libwebkit2gtk-4.1-dev libcairo2-dev
 ```

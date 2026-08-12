@@ -64,6 +64,8 @@ We are implementing hardware logic in phases to build a comprehensive workflow.
 **Requirements:**
 - Bitwig Studio 5.1 or newer (Uses API version 25).
 - Rust (`cargo`) installed on your system.
+- The **Encdr** repository cloned as a sibling directory to this project (required by `Cargo.toml` path dependencies, i.e. in the same parent directory as this project, or modify the Cargo.toml file if you want to install `encdr` elsewhere).
+- Linux users: `udev` rules configured for your Maschine hardware to avoid requiring `sudo`, and `webkit2gtk` / `cairo-rs` system dependencies if using the web view screens.
 
 Follow these steps to get the controller working with your setup.
 

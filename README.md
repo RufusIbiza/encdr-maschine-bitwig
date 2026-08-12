@@ -80,7 +80,7 @@ sudo udevadm control --reload-rules
 sudo udevadm trigger
 ```
 
-You will also need to install the associated system dependencies to enable the webview-based. 
+You will also need to install the associated system dependencies to enable the webview-based screens. 
 
 On Debian/Ubuntu based systems:
 ```bash

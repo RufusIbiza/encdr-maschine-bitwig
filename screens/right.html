@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 480px; height: 272px;
+    overflow: hidden;
+    background: #1e1e1e;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: #eee;
+  }
+</style>
+</head>
+<body>
+<canvas id="c" width="480" height="272"></canvas>
+<script>
+const W = 480, H = 272;
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+const COLORS = ['#ff4d4d', '#ff8c1a', '#ffd11a', '#4dff4d', '#1affff', '#4d4dff', '#9b4dff', '#ff4dff'];
+const BG = '#1e1e1e';
+const DIM = '#2a2a2a';
+const BORDER = '#3a3a3a';
+const TEXT = '#ddd';
+
+let state = {
+  device: "No Device",
+  names: ["", "", "", "", "", "", "", ""],
+  displays: ["", "", "", "", "", "", "", ""],
+  values: [0, 0, 0, 0, 0, 0, 0, 0],
+  modulated: [0, 0, 0, 0, 0, 0, 0, 0]
+};
+
+function drawKnob(cx, cy, r, value, name, display, colorIndex, modValue) {
+  const startAngle = Math.PI * 0.75;
+  const endAngle = Math.PI * 2.25;
+  const valAngle = startAngle + value * (endAngle - startAngle);
+
+  // Background arc
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, startAngle, endAngle);
+  ctx.strokeStyle = DIM;
+  ctx.lineWidth = 6;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+
+  // Value arc
+  if (value > 0) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, startAngle, valAngle);
+    ctx.strokeStyle = COLORS[colorIndex];
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+  }
+
+  // Modulated value indicator (white dot)
+  if (modValue !== undefined) {
+    const modAngle = startAngle + modValue * (endAngle - startAngle);
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(modAngle) * r, cy + Math.sin(modAngle) * r, 4, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    // subtle outline for visibility
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#000000';
+    ctx.stroke();
+  }
+
+  // Display text instead of percentage
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 16px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(display || Math.round(value * 100) + "%", cx, cy + 4);
+
+  // Name
+  ctx.fillStyle = TEXT;
+  ctx.font = '12px sans-serif';
+  ctx.fillText(name, cx, cy + r + 20);
+}
+
+function render() {
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = BG;
+  ctx.fillRect(0, 0, W, H);
+
+  // Top header (Empty on right screen usually, or continuation)
+  ctx.fillStyle = DIM;
+  ctx.fillRect(0, 0, W, 40);
+
+  // 4 Encoders (Right Screen shows index 4 to 7)
+  const encR = 30;
+  const encY = 150;
+  const encSpacing = W / 4;
+  const encStartX = encSpacing / 2;
+
+  for (let i = 0; i < 4; i++) {
+    const cx = encStartX + i * encSpacing;
+    const val = state.values[i+4];
+    const mod = state.modulated ? state.modulated[i+4] : val;
+    const name = state.names[i+4] || "-";
+    const display = state.displays[i+4] || "";
+    // We pass i+4 to use colors 4-7 for the right screen knobs
+    drawKnob(cx, encY, encR, val, name, display, i+4, mod);
+  }
+}
+
+window.encdr = {
+  onMessage(channel, data) {
+    if (channel === 'state') {
+      state = data;
+      render();
+    }
+  }
+};
+
+render();
+</script>
+</body>
+</html>

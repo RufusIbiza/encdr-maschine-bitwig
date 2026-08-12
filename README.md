@@ -1,6 +1,6 @@
 # Maschine Mk3 Bitwig Controller (Proof-of-Concept)
 
-A high-performance, Rust-based Maschine Mk3 controller for Bitwig Studio, utilizing HID communication via `encdr` to provide rich, full-color feedback on the Mk3's dual screens.
+A high-performance, Rust-based Maschine Mk3 controller for Bitwig Studio, utilizing HID communication via [`encdr`](https://github.com/RufusIbiza/Encdr) to provide rich, full-color feedback on the Mk3's dual screens.
 
 <p align="center">
   <img src="assets/left_screen.png" width="45%" alt="Left Screen">
@@ -15,7 +15,7 @@ Historically, some controller extensions (like the excellent DrivenByMoss, which
 
 This project uses a different architecture:
 1. **Bitwig Controller Script (`encdr-maschine-mk3.control.js`)**: A lightweight script running inside Bitwig. Its sole responsibility is to watch for changes in Bitwig's state (track selection, parameters, transport) and broadcast them over UDP using Open Sound Control (OSC). It also listens for incoming OSC commands to control Bitwig.
-2. **Rust Backend Engine**: A standalone, high-performance Rust application that communicates directly with the Maschine hardware via USB HID using the `encdr` library. It acts as an OSC server/client, receiving state from Bitwig, rendering beautiful WebKit-based UIs to the Maschine screens, and sending hardware button/encoder events back to Bitwig with near-zero latency.
+2. **Rust Backend Engine**: A standalone, high-performance Rust application that communicates directly with the Maschine hardware via USB HID using the [`encdr`](https://github.com/RufusIbiza/Encdr) library. It acts as an OSC server/client, receiving state from Bitwig, rendering beautiful WebKit-based UIs to the Maschine screens, and sending hardware button/encoder events back to Bitwig with near-zero latency.
 
 By moving the heavy lifting (like rendering screen UIs) out of the Bitwig sandbox and into a native Rust application, we unlock the full potential of the Maschine Mk3's dual displays.
 
@@ -59,7 +59,7 @@ We are implementing hardware logic in phases to build a comprehensive workflow.
 - Utilize the screens to navigate Bitwig's preset/device browser.
 - Map the 4-D encoder (joystick) for fast scrolling and loading.
 
-## 🛠 Setup & Installation Instructions
+## Setup & Installation Instructions
 
 **Requirements:**
 - Bitwig Studio 5.1 or newer (Uses API version 25).

@@ -65,7 +65,28 @@ We are implementing hardware logic in phases to build a comprehensive workflow.
 - Bitwig Studio 5.1 or newer (Uses API version 25).
 - Rust (`cargo`) installed on your system.
 - The **Encdr** repository cloned as a sibling directory to this project (required by `Cargo.toml` path dependencies, i.e. in the same parent directory as this project, or modify the Cargo.toml file if you want to install `encdr` elsewhere).
-- Linux users: `udev` rules configured for your Maschine hardware to avoid requiring `sudo`, and `webkit2gtk` / `cairo-rs` system dependencies if using the web view screens.
+
+### OS-Specific Considerations
+
+#### Linux
+To allow `encdr` to communicate with the USB hardware without requiring `sudo`, you must configure `udev` rules. 
+Create a file (e.g. `/etc/udev/rules.d/99-maschine.rules`) and add the following line to grant access to the Native Instruments Vendor ID (`17cc`):
+```udev
+SUBSYSTEM=="usb", ATTRS{idVendor}=="17cc", MODE="0666"
+```
+After saving the file, reload the rules:
+```bash
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+```
+If you are using the WebView screens (`encdr-view`), you also need to install the associated system dependencies. On Debian/Ubuntu based systems:
+```bash
+sudo apt install libwebkit2gtk-4.1-dev libcairo2-dev
+```
+
+#### Windows / macOS
+Native Instruments installs background services to manage their hardware. These services will likely claim the Maschine Mk3, preventing this application from connecting to it.
+Before running this software, you will probably need to terminate or disable these background processes (e.g., `NIHardwareHelper.exe`, `NIHostIntegrationAgent.exe`, or `NIHardwareAgent` depending on your OS) via the Task Manager (Windows) or Activity Monitor (macOS) to avoid USB conflicts.
 
 Follow these steps to get the controller working with your setup.
 

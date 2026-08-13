@@ -1,12 +1,12 @@
 [package]
 name = "machine-bitwig"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [dependencies]
 crossbeam-channel = "0.5.16"
-encdr = { version = "0.1.0", path = "../Encdr/encdr" }
-encdr-view = { version = "0.1.0", path = "../Encdr/encdr-view" }
+encdr = { version = "0.2.0", path = "../Encdr/encdr" }
+encdr-view = { version = "0.2.0", path = "../Encdr/encdr-view" }
 rosc = "0.11.4"
 serde_json = "1.0.151"
 tokio = { version = "1.53.1", features = ["full"] }

@@ -2,10 +2,7 @@
 loadAPI(25);
 
 // Define the controller with Vendor "Rufus", Name "Maschine Mk3 (OSC)", Version, UUID, and Author.
-// Changing the vendor name here organizes it under "Rufus" in the Bitwig controller settings.
 host.defineController("Rufus", "Maschine Mk3 (OSC)", "1.0", "f876359e-4b48-43e9-a3b0-0ab8548a31ec", "Rufus");
-// Define dummy MIDI ports. The script relies on OSC instead of standard MIDI, 
-// but Bitwig requires at least 1 input and output port to initialize a controller properly.
 host.defineMidiPorts(1, 1);
 
 // Global references to Bitwig API objects
@@ -18,70 +15,73 @@ var transport;
 var isCurrentlyPlaying = false;
 var params = [];
 
-// How often (in milliseconds) we poll for high-rate modulation values. 
-// This is necessary because Bitwig's JS API does not always fire observer callbacks 
-// for audio-rate modulations fast enough.
 var MODULATION_POLL_MS = 40;
 
 // State caches to avoid spamming the OSC connection with unchanged values
 var lastValues = {};
 var lastNames = {};
 
+// Cached state populated by observers as Bitwig updates them
+var cachedTrackMuted = 0;
+var cachedIsPlaying = 0;
+var cachedIsRecording = 0;
+var cachedDeviceName = "No Device";
+var cachedParamNames = ["", "", "", "", "", "", "", ""];
+var cachedParamDisplays = ["", "", "", "", "", "", "", ""];
+var cachedParamValues = [0, 0, 0, 0, 0, 0, 0, 0];
+var cachedParamModulated = [0, 0, 0, 0, 0, 0, 0, 0];
+
 // UDP ports for two-way communication between Bitwig and the Rust backend
 var RUST_APP_PORT = 8081;
 var BITWIG_PORT = 8082;
 
 function init() {
-    // 1. Setup Bitwig API objects FIRST
-    // Create cursors that follow the user's selected track and device.
     cursorTrack = host.createCursorTrack(1, 0);
     cursorDevice = cursorTrack.createCursorDevice();
-    // Grab the first 8 remote control parameters of the currently selected device.
     remoteControls = cursorDevice.createCursorRemoteControlsPage(8);
-    // Create a transport object to control playback, recording, and looping.
     transport = host.createTransport();
 
-    // 2. Initialize OSC communication
     var osc = host.getOscModule();
     var addressSpace = osc.createAddressSpace();
     
-    // Register a catch-all listener for incoming OSC messages from the Rust backend.
+    addressSpace.registerMethod("/refresh", "", "Refresh state", function(source, msg) {
+        handleRefresh();
+    });
+
     addressSpace.registerDefaultMethod(function(source, msg) {
         var addr = msg.getAddressPattern();
         var args = msg.getArguments();
         
         if (addr.startsWith("/device/param/")) {
             var parts = addr.split("/");
-            // Handle absolute value setting
             if (parts.length === 5 && parts[4] === "set") {
                 var index = parseInt(parts[3], 10);
                 if (index >= 0 && index < 8 && args.length > 0) {
                     var val = args[0];
                     remoteControls.getParameter(index).value().set(val);
                 }
-            // Handle incremental value changes (e.g., from hardware encoders)
             } else if (parts.length === 5 && parts[4] === "inc") {
                 var index = parseInt(parts[3], 10);
                 if (index >= 0 && index < 8 && args.length > 0) {
                     var val = args[0];
-                    // Map the delta to the parameter. Resolution of 128 means a val of 1 increments by 1/128th.
                     remoteControls.getParameter(index).inc(val, 128);
                 }
             }
-        // Device Navigation
         } else if (addr === "/device/nav/next") {
             cursorDevice.selectNext();
         } else if (addr === "/device/nav/prev") {
             cursorDevice.selectPrevious();
-        // Transport Controls
         } else if (addr === "/transport/play") {
-            transport.play();
+            if (isCurrentlyPlaying) {
+                transport.stop();
+            } else {
+                transport.play();
+            }
         } else if (addr === "/transport/stop") {
             transport.stop();
         } else if (addr === "/transport/rec") {
             transport.isArrangerRecordEnabled().toggle();
         } else if (addr === "/transport/rec_count_in") {
-            // Special handling for count-in recording
             if (typeof transport.preRoll === "function") {
                 try { transport.preRoll().set("1 bar"); } catch(e1) {}
             }
@@ -93,7 +93,6 @@ function init() {
                 transport.play();
             }
         } else if (addr === "/transport/restart") {
-            // Restart playback or return to 0 depending on the current play state
             if (isCurrentlyPlaying) {
                 if (typeof transport.jumpToPlaystartPosition === "function") {
                     try { transport.jumpToPlaystartPosition(); } catch(e) { transport.restart(); }
@@ -107,96 +106,115 @@ function init() {
             }
         } else if (addr === "/transport/loop_toggle") {
             transport.isArrangerLoopEnabled().toggle();
+        } else if (addr === "/refresh") {
+            handleRefresh();
         }
     });
 
-    // Start the OSC Server to receive messages and the Client to send messages.
     oscServer = osc.createUdpServer(BITWIG_PORT, addressSpace);
     oscClient = osc.connectToUdpServer("127.0.0.1", RUST_APP_PORT, osc.createAddressSpace());
 
-    // 3. Setup Observers to sync Bitwig state to the Rust application
-    
-    // Transport State Observers
+    // Observers
+    cursorTrack.mute().markInterested();
+    cursorTrack.mute().addValueObserver(function(isMuted) {
+        cachedTrackMuted = isMuted ? 1 : 0;
+        sendOsc("/track/mute", cachedTrackMuted);
+    });
+
     transport.isPlaying().markInterested();
     transport.isPlaying().addValueObserver(function(isPlaying) {
+        cachedIsPlaying = isPlaying ? 1 : 0;
         isCurrentlyPlaying = isPlaying;
-        sendOsc("/transport/play", isPlaying ? 1 : 0);
+        sendOsc("/transport/play", cachedIsPlaying);
     });
 
     transport.isArrangerRecordEnabled().markInterested();
     transport.isArrangerRecordEnabled().addValueObserver(function(isRecording) {
-        sendOsc("/transport/rec", isRecording ? 1 : 0);
+        cachedIsRecording = isRecording ? 1 : 0;
+        sendOsc("/transport/rec", cachedIsRecording);
     });
 
-    // Device Observer
     cursorDevice.name().markInterested();
     cursorDevice.name().addValueObserver(function(name) {
-        // Clear caches when device changes to ensure all parameters are resent
+        cachedDeviceName = name || "No Device";
         lastNames = {};
         lastValues = {};
-        sendOsc("/device/name", name);
+        sendOsc("/device/name", cachedDeviceName);
     });
 
-    // Setup observers for the 8 remote control parameters (Macros)
     for (var i = 0; i < 8; i++) {
         var param = remoteControls.getParameter(i);
         params[i] = param;
         param.name().markInterested();
         param.value().markInterested();
+        param.displayedValue().markInterested();
+        param.modulatedValue().markInterested();
         
-        // Use an IIFE (Immediately Invoked Function Expression) to capture the index properly in loops
         (function(index) {
             param.name().addValueObserver(function(name) {
+                cachedParamNames[index] = name || "";
                 if (lastNames[index] !== name) {
                     lastNames[index] = name;
-                    sendOsc("/device/param/" + index + "/name", name);
+                    sendOsc("/device/param/" + index + "/name", cachedParamNames[index]);
                 }
             });
             param.value().addValueObserver(function(value) {
+                cachedParamValues[index] = typeof value === "number" ? value : 0.0;
                 if (lastValues[index] !== value) {
                     lastValues[index] = value;
-                    sendOsc("/device/param/" + index + "/value", value);
+                    sendOsc("/device/param/" + index + "/value", cachedParamValues[index]);
                 }
             });
-            // modulatedValue() does not reliably push observer callbacks at modulation rate
-            // (Bitwig only guarantees .get() is fresh when polled) - so this is a cheap bonus
-            // path only. The MODULATION_POLL_MS task below is the mechanism we actually rely on.
-            param.modulatedValue().markInterested();
-            
-            // Also forward the formatted string representation (e.g. "12.5 dB")
             param.displayedValue().addValueObserver(function(displayStr) {
-                sendOsc("/device/param/" + index + "/display", displayStr);
+                cachedParamDisplays[index] = displayStr || "";
+                sendOsc("/device/param/" + index + "/display", cachedParamDisplays[index]);
             });
         })(i);
     }
     
     pollModulation();
-
     println("Maschine Mk3 (OSC) initialized on port " + BITWIG_PORT);
 }
 
-// Explicit timer, independent of Bitwig's observer/flush event system - modulatedValue()
-// changes at modulation rate (e.g. an LFO) and Bitwig does not push a JS callback for every
-// such change, so this is the only mechanism that reliably keeps the tick live.
+function handleRefresh() {
+    // Pull live values directly instead of replaying the cache: the cache is only
+    // updated by observer change-callbacks, which may never fire again if the
+    // device/track selection hasn't changed since Bitwig started - .get() always
+    // reflects the true current state since these values were marked interested.
+    sendOsc("/transport/play", transport.isPlaying().get() ? 1 : 0);
+    sendOsc("/transport/rec", transport.isArrangerRecordEnabled().get() ? 1 : 0);
+    sendOsc("/track/mute", cursorTrack.mute().get() ? 1 : 0);
+    sendOsc("/device/name", cursorDevice.name().get() || "No Device");
+    for (var i = 0; i < 8; i++) {
+        var param = params[i];
+        sendOsc("/device/param/" + i + "/name", param.name().get() || "");
+        sendOsc("/device/param/" + i + "/display", param.displayedValue().get() || "");
+        sendOsc("/device/param/" + i + "/value", param.value().get());
+        sendOsc("/device/param/" + i + "/modulated", param.modulatedValue().get());
+    }
+}
+
 function pollModulation() {
     for (var i = 0; i < 8; i++) {
         var modValue = params[i].modulatedValue().get();
-        if (modValue !== lastModulatedValues[i]) {
-            lastModulatedValues[i] = modValue;
-            sendOsc("/device/param/" + i + "/modulated", modValue);
+        if (typeof modValue === "number") {
+            cachedParamModulated[i] = modValue;
+            if (modValue !== lastModulatedValues[i]) {
+                lastModulatedValues[i] = modValue;
+                sendOsc("/device/param/" + i + "/modulated", modValue);
+            }
         }
     }
     host.scheduleTask(pollModulation, MODULATION_POLL_MS);
 }
 
-// Send OSC utility: safely wraps oscClient to prevent crashes on sending errors
 function sendOsc(address, arg) {
     if (oscClient) {
         try {
             if (typeof arg === "string") {
                 oscClient.sendMessage(address, arg);
             } else if (typeof arg === "number") {
-                oscClient.sendMessage(address, arg); // Sends as float or int depending on Bitwig API wrapping
+                oscClient.sendMessage(address, arg);
             }
         } catch (e) {
             println("OSC Send Error: " + e);
@@ -207,10 +225,4 @@ function sendOsc(address, arg) {
 var lastModulatedValues = [];
 for (var i = 0; i < 8; i++) {
     lastModulatedValues[i] = -1;
-}
-
-function flush() {
-}
-
-function exit() {
 }

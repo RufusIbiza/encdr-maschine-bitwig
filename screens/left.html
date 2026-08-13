@@ -20,7 +20,7 @@ const W = 480, H = 272;
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
-const COLORS = ['#ff4d4d', '#ff8c1a', '#ffd11a', '#4dff4d', '#1affff', '#4d4dff', '#9b4dff', '#ff4dff'];
+const COLORS = ['#ff4d4d', '#ff8c1a', '#ffd11a', '#4dff4d', '#1affff', '#4d4dff', '#9b4dff', '#ff4dff', '#666666'];
 const BG = '#1e1e1e';
 const DIM = '#2a2a2a';
 const BORDER = '#3a3a3a';
@@ -91,11 +91,13 @@ function render() {
   ctx.fillStyle = DIM;
   ctx.fillRect(0, 0, W, 40);
   
-  ctx.fillStyle = COLORS[1]; // Use orange for the device name header
+  ctx.fillStyle = state.track_muted ? '#666666' : COLORS[1]; // Use grey if muted
   ctx.font = 'bold 16px sans-serif';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText(state.device.toUpperCase(), 20, 20);
+  let title = state.device.toUpperCase();
+  if (state.track_muted) title = "[MUTED] " + title;
+  ctx.fillText(title, 20, 20);
 
   // 4 Encoders (Left Screen shows index 0 to 3)
   const encR = 30;
@@ -109,7 +111,16 @@ function render() {
     const mod = state.modulated ? state.modulated[i] : val;
     const name = state.names[i] || "-";
     const display = state.displays[i] || "";
-    drawKnob(cx, encY, encR, val, name, display, i, mod);
+    drawKnob(cx, encY, encR, val, name, display, state.track_muted ? 8 : i, mod);
+  }
+
+  // Draw dashed border if muted
+  if (state.track_muted) {
+    ctx.setLineDash([15, 10]);
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = '#666666';
+    ctx.strokeRect(3, 3, W - 6, H - 6);
+    ctx.setLineDash([]);
   }
 }
 

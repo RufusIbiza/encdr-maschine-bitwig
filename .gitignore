@@ -1,1 +1,6 @@
 /target
+session_state.md
+session_state*
+/Example UI/*
+node_modules/
+**/node_modules/

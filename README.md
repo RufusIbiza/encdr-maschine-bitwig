@@ -19,35 +19,60 @@ This project uses a different architecture:
 
 By moving the heavy lifting (like rendering screen UIs) out of the Bitwig sandbox and into a native Rust application, we unlock the full potential of the Maschine Mk3's dual displays.
 
-## Current Features (Phase 1: Device Control)
+## Current Features
 
-- **Bi-directional OSC Communication**: Seamlessly syncs state between Bitwig and the Maschine Mk3 hardware with near-zero latency.
-- **Dynamic Dual Screens**: 
-  - The left and right 480x272 screens render Bitwig-styled, dark-mode UIs using `encdr-view`.
-  - Displays the currently selected device's name.
-  - Displays the names and real-time values of all 8 macro/parameters.
-  - Automatically updates the UI when parameters are automated or changed in Bitwig.
-  - Live modulation indicator: a white tick on each knob tracks the modulated value in real time (e.g. LFOs/envelopes mapped to a macro).
-- **Hardware Integration**:
-  - The 8 infinite encoders under the screens smoothly map to the Bitwig device parameters.
-  - The `LEFT` and `RIGHT` arrow buttons navigate through the devices on the currently selected track.
-  - **Transport Controls**:
-    - **PLAY**: Starts playback from current cuepoint. Reflects live playback status (ON when playing, OFF when stopped).
-    - **STOP**: Stops playback. Reflects stopped status (ON when stopped, OFF when playing).
-    - **REC**: Toggles arranger recording from playmarker. Reflects live record status.
-    - **SHIFT + REC**: Turns on count-in recording.
-    - **RESTART**: Returns to current cuepoint and continues playback if playing; sets playhead to 0 and plays if stopped.
-    - **SHIFT + RESTART**: Toggles arranger looping on/off.
+### Core Infrastructure & Architecture
+- **Bi-directional OSC Communication**: Seamlessly syncs state between Bitwig Studio and the Maschine Mk3 hardware over UDP with near-zero latency.
+- **Svelte 5 Single Page Application (SPA) Displays**:
+  - Left and right 480x272 screens render Bitwig-styled, dark-mode UIs using `encdr-view` and Svelte 5 runes (`$state`, `$derived`).
+  - High performance, reactive SVG and HTML rendering with zero unnecessary overhead.
+  - Inlined standalone builds for zero runtime web-server dependencies.
+
+### Phase 1: Device Control (`PLUGIN` Mode)
+- **Dynamic Dual Screens**:
+  - Displays currently selected device name and parameters.
+  - Displays names, values, and real-time modulated indicators (white tick tracks modulated values like LFOs and envelopes).
+- **Hardware Controls**:
+  - 8 screen encoders control the 8 macros/parameters with fine resolution support.
+  - `LEFT` and `RIGHT` arrow buttons navigate through devices on the active track.
+
+### Phase 2: Mixer & Track Control (`MIXER` & `CHANNEL` Modes)
+- **8-Track Bank View (`MIXER` Mode)**:
+  - Left Screen: Tracks 1 – 4; Right Screen: Tracks 5 – 8.
+  - Track color headers, track numbers, and track names.
+  - Real-time vertical stereo VU peak level meters with multi-segment color gradients.
+  - Vertical volume faders, dB numerical readouts, and Pan indicators.
+  - Status flags for Mute (`[M]`), Solo (`[S]`), Rec-Arm (`[●]`), and selection glow.
+  - **Encoders 1 – 8**: Control Volume for tracks 1 – 8 (or Pan when holding `SHIFT`).
+  - **Top Buttons (`top_1` to `top_8`)**: Select tracks, or toggle Mute/Solo/Arm when combined with `MUTE`, `SOLO`, or `SHIFT`.
+  - **4-D Encoder & Arrows**: Bank tracks in increments of 8 channels (`◄` / `►`) or scroll tracks.
+- **Focused Channel View (`CHANNEL` Mode)**:
+  - Left Screen: Detailed view of the selected cursor track with master fader, large VU meters, pan knob, and track status.
+  - Right Screen: 6 Send level controls (Send A through F) with dials and dB readouts.
+  - **Encoders 1 – 8**: Encoders 1 & 2 control Volume and Pan; Encoders 3 – 8 control Sends 1 – 6.
+- **Mode Switching**:
+  - Press `MIXER` to enter 8-track mixer view.
+  - Press `PLUGIN` to enter Device parameter view.
+  - Press `CHANNEL` to enter Focused track channel view.
+  - Press the 4-D encoder to toggle between Mixer and Device views.
+  - Hardware button LEDs reflect the active mode.
+
+### Transport Controls
+- **PLAY**: Starts playback from current cuepoint. Reflects live playback status.
+- **STOP**: Stops playback. Reflects stopped status.
+- **REC**: Toggles arranger recording from playmarker. Reflects live record status.
+- **SHIFT + REC**: Turns on count-in recording.
+- **RESTART**: Returns to current cuepoint and continues playback if playing; sets playhead to 0 and plays if stopped.
+- **SHIFT + RESTART**: Toggles arranger looping on/off.
 
 ## Roadmap
 
 We are implementing hardware logic in phases to build a comprehensive workflow.
 
-### Phase 2: Mixer & Track Control
-- Implement track navigation (Next/Prev track).
-- Map encoders to Volume, Pan, and Sends.
-- Utilize the screens to render level meters and track colors.
-- Map hardware buttons to Mute, Solo, Arm, and Select.
+- [x] **Phase 1**: Device Control
+- [x] **Phase 2**: Mixer & Track Control
+- [ ] **Phase 3**: Sequencer & Pad Modes
+- [ ] **Phase 4**: Browser Integration
 
 ### Phase 3: Sequencer & Pad Modes
 - Implement core pad modes:
@@ -121,7 +146,21 @@ Ensure your Maschine Mk3 is plugged in and powered on. Start the Rust applicatio
 cd machine-bitwig
 cargo run
 ```
-You should see "Connected to Maschine Mk3" in the terminal, and the screens on the hardware should light up!
+You should see "Connected to NI Maschine Mk3" in the terminal, and the screens on the hardware should light up!
+
+#### Desktop Screen Mirroring / Preview
+To mirror the dual screens in a desktop window (useful for development and streaming):
+```bash
+# Pass --visible to the application via cargo's argument separator:
+cargo run -- --visible
+
+# Or using the cargo alias:
+cargo preview
+# or: cargo run-visible
+
+# Or via environment variable:
+VISIBLE=1 cargo run
+```
 
 ## License
 

@@ -1,17 +1,25 @@
 mod logic;
+mod nav;
 
 use std::net::UdpSocket;
 use std::time::Duration;
 use std::sync::Arc;
 
 use encdr::{Encdr, EncdrConfig, LedValue};
-use encdr_view::{ScreenContent, ScreenView};
+use encdr_view::{DualScreenView, ScreenContent, ScreenView};
 use rosc::{OscPacket, decoder, OscMessage};
 use crossbeam_channel::{unbounded, select};
 
 use logic::AppLogic;
 
 fn main() {
+    let visible = std::env::args().any(|a| a == "--visible" || a == "-v")
+        || std::env::var("VISIBLE").map(|v| v == "1" || v == "true").unwrap_or(false);
+
+    if visible {
+        println!("Desktop screen preview enabled (--visible)");
+    }
+
     // Initialize the Encdr library
     let mut encdr = Encdr::new(EncdrConfig::default()).expect("Failed to init encdr");
     
@@ -29,28 +37,25 @@ fn main() {
 
     std::thread::sleep(Duration::from_millis(500));
 
-    // Initialize all black button LEDs to OFF (0) by default
+    // Initialize all actionable button LEDs to DIM by default
     for group in &desc.leds {
         if group.id == "button_leds" {
             for item in &group.items {
-                encdr.set_led_in_group(device_id, &group.id, item.name(), LedValue::Single(0));
+                encdr.set_led_in_group(device_id, &group.id, item.name(), LedValue::Dim);
             }
         }
     }
-    encdr.set_led_in_group(device_id, "button_leds", "stop", LedValue::Single(255));
+    encdr.set_led_in_group(device_id, "button_leds", "stop", LedValue::Bright);
+    encdr.set_led_in_group(device_id, "button_leds", "mixer", LedValue::Bright);
 
-    let left_html = include_str!("../screens/left.html");
-    let right_html = include_str!("../screens/right.html");
+    let dual_html = include_str!("../screens/dual.html");
 
-    let left_view = ScreenView::new(
-        &encdr, device_id, "left",
-        ScreenContent::Html(left_html.to_string()), false,
-    ).expect("Left WebView failed");
-
-    let right_view = ScreenView::new(
-        &encdr, device_id, "right",
-        ScreenContent::Html(right_html.to_string()), false,
-    ).expect("Right WebView failed");
+    let dual_view = DualScreenView::new(
+        &encdr,
+        device_id,
+        ScreenContent::Html(dual_html.to_string()),
+        visible,
+    ).expect("DualScreenView failed");
 
     let socket = UdpSocket::bind("127.0.0.1:8081").unwrap();
     socket.set_nonblocking(false).unwrap();
@@ -117,20 +122,23 @@ fn main() {
             state_updated = true;
         }
 
-        // 2. Only push to the WebViews (and thus trigger a screenshot) when state actually changed
+        // 2. Only push to the WebView (and thus trigger a screenshot) when state actually changed
         if state_updated {
             if let Some(ref state) = current_state {
-                left_view.send("state", state.clone());
-                right_view.send("state", state.clone());
+                dual_view.send("state", state.clone());
                 needs_capture = true;
             }
+        }
+
+        // The page asks for frames itself while CSS transitions run (e.g. the channel strip scrolling)
+        if dual_view.is_frame_ready() {
+            needs_capture = true;
         }
 
         // 3. Capture rendered frames and submit to hardware (rate-limited to 25 FPS max)
         if needs_capture && last_capture.elapsed() >= min_capture_interval {
             ScreenView::pump_events();
-            let _ = left_view.capture_and_submit(&encdr);
-            let _ = right_view.capture_and_submit(&encdr);
+            let _ = dual_view.capture_and_submit(&encdr);
             needs_capture = false;
             last_capture = std::time::Instant::now();
         }
@@ -138,8 +146,7 @@ fn main() {
         // Heartbeat capture (~0.2Hz) to recover from any dropped USB frames, independent of state changes
         frame_count += 1;
         if frame_count % 300 == 0 {
-            let _ = left_view.capture_and_submit(&encdr);
-            let _ = right_view.capture_and_submit(&encdr);
+            let _ = dual_view.capture_and_submit(&encdr);
         }
 
         std::thread::sleep(Duration::from_millis(16));

@@ -1,21 +1,29 @@
-# Maschine Mk3 Bitwig Controller (Proof-of-Concept)
+# Embit (Community Edition)
 
-A high-performance, Rust-based Maschine Mk3 controller for Bitwig Studio, utilizing HID communication via [`encdr`](https://github.com/RufusIbiza/Encdr) to provide rich, full-color feedback on the Mk3's dual screens.
+**Open-source, dual-display Maschine Mk3 controller for Bitwig Studio**
+
+Formerly known as `encdr-maschine-bitwig`, **Embit** brings Native Instruments Maschine Mk3 hardware into Bitwig Studio, utilizing direct USB HID communication via [`encdr`](https://github.com/RufusIbiza/Encdr) and Bitwig's official JavaScript Controller API to deliver rich, full-color feedback on the Mk3's dual screens.
 
 <p align="center">
   <img src="assets/left_screen.png" width="45%" alt="Left Screen">
   <img src="assets/right_screen.png" width="45%" alt="Right Screen">
 </p>
 
-This project is currently a proof-of-concept on the road to getting the Maschine Mk3 working beautifully with Bitwig.
+---
+
+> [!NOTE]
+> **Looking for advanced features like Arranger Bird's-Eye View and Live Clip Rendering?**  
+> Check out **[Embit Pro](https://github.com/RufusIbiza/embit-pro)**, the commercial edition featuring deep engine introspection via Java extension, live timeline clip rendering, sub-beat scrubbing, and expanded hardware navigation.
+
+---
 
 ## Architectural Approach (Rust + OSC)
 
-Historically, some controller extensions (like the excellent DrivenByMoss, which served as an inspiration for the goals of this project) have relied entirely on Bitwig's Java extension API. While powerful, the Java sandbox imposes limitations on direct hardware access, especially for high-resolution tasks like rendering UI on external displays.
+Historically, controller extensions (like the excellent DrivenByMoss) have run entirely inside Bitwig's Java sandbox. While powerful, the Java sandbox imposes limitations on direct hardware access, especially for high-resolution tasks like rendering UI on external displays.
 
-This project uses a different architecture:
-1. **Bitwig Controller Script (`encdr-maschine-mk3.control.js`)**: A lightweight script running inside Bitwig. Its sole responsibility is to watch for changes in Bitwig's state (track selection, parameters, transport) and broadcast them over UDP using Open Sound Control (OSC). It also listens for incoming OSC commands to control Bitwig.
-2. **Rust Backend Engine**: A standalone, high-performance Rust application that communicates directly with the Maschine hardware via USB HID using the [`encdr`](https://github.com/RufusIbiza/Encdr) library. It acts as an OSC server/client, receiving state from Bitwig, rendering beautiful WebKit-based UIs to the Maschine screens, and sending hardware button/encoder events back to Bitwig with near-zero latency.
+**Embit** uses a decoupled architecture:
+1. **Bitwig Controller Script (`encdr-maschine-mk3.control.js`)**: A lightweight script running inside Bitwig. It watches for changes in Bitwig's state (track selection, parameters, transport) and broadcasts them over UDP using Open Sound Control (OSC), while receiving incoming hardware commands from the daemon.
+2. **Rust Backend Engine (`embit`)**: A standalone, high-performance Rust application that communicates directly with the Maschine hardware via USB HID using the [`encdr`](https://github.com/RufusIbiza/Encdr) library. It acts as an OSC server/client, rendering beautiful WebKit-based UIs to the Maschine screens with near-zero latency.
 
 By moving the heavy lifting (like rendering screen UIs) out of the Bitwig sandbox and into a native Rust application, we unlock the full potential of the Maschine Mk3's dual displays.
 
@@ -28,7 +36,7 @@ By moving the heavy lifting (like rendering screen UIs) out of the Bitwig sandbo
   - High performance, reactive SVG and HTML rendering with zero unnecessary overhead.
   - Inlined standalone builds for zero runtime web-server dependencies.
 
-### Phase 1: Device Control (`PLUGIN` Mode)
+### Device Control (`PLUGIN` Mode)
 - **Dynamic Dual Screens**:
   - Displays currently selected device name and parameters.
   - Displays names, values, and real-time modulated indicators (white tick tracks modulated values like LFOs and envelopes).
@@ -36,7 +44,7 @@ By moving the heavy lifting (like rendering screen UIs) out of the Bitwig sandbo
   - 8 screen encoders control the 8 macros/parameters with fine resolution support.
   - `LEFT` and `RIGHT` arrow buttons navigate through devices on the active track.
 
-### Phase 2: Mixer & Track Control (`MIXER` & `CHANNEL` Modes)
+### Mixer & Track Control (`MIXER` & `CHANNEL` Modes)
 - **8-Track Bank View (`MIXER` Mode)**:
   - Left Screen: Tracks 1 – 4; Right Screen: Tracks 5 – 8.
   - Track color headers, track numbers, and track names.
@@ -65,103 +73,75 @@ By moving the heavy lifting (like rendering screen UIs) out of the Bitwig sandbo
 - **RESTART**: Returns to current cuepoint and continues playback if playing; sets playhead to 0 and plays if stopped.
 - **SHIFT + RESTART**: Toggles arranger looping on/off.
 
-## Roadmap
-
-We are implementing hardware logic in phases to build a comprehensive workflow.
-
-- [x] **Phase 1**: Device Control
-- [x] **Phase 2**: Mixer & Track Control
-- [ ] **Phase 3**: Sequencer & Pad Modes
-- [ ] **Phase 4**: Browser Integration
-
-### Phase 3: Sequencer & Pad Modes
-- Implement core pad modes:
-  - **Play Mode**: 4x4 chromatic or scale-based melodic playing.
-  - **Drum Mode**: Standard drum rack triggering.
-  - **Step Sequencer**: Full 16-step sequencing on the pads, with screens displaying clip/note information.
-
-### Phase 4: Browser Integration
-- Utilize the screens to navigate Bitwig's preset/device browser.
-- Map the 4-D encoder (joystick) for fast scrolling and loading.
+---
 
 ## Setup & Installation Instructions
 
 **Requirements:**
-- Bitwig Studio 5.1 or newer (Uses API version 25).
+- Bitwig Studio 5.1 or newer (Uses Controller API version 25).
 - Rust (`cargo`) installed on your system.
-- The **Encdr** repository cloned as a sibling directory to this project (required by `Cargo.toml` path dependencies, i.e. in the same parent directory as this project, or modify the Cargo.toml file if you want to install `encdr` elsewhere).
+- The **Encdr** repository cloned as a sibling directory to this project (`../Encdr`).
 
 ### OS-Specific Considerations
 
 #### Linux
-To allow `encdr` to communicate with the USB hardware without requiring `sudo`, you must configure `udev` rules. 
-Create a file (e.g. `/etc/udev/rules.d/99-maschine.rules`) and add the following line to grant access to the Native Instruments Vendor ID (`17cc`):
+To allow `encdr` to communicate with the USB hardware without requiring `sudo`, configure `udev` rules. 
+Create `/etc/udev/rules.d/99-maschine.rules`:
 ```udev
 SUBSYSTEM=="usb", ATTRS{idVendor}=="17cc", MODE="0666"
 ```
-After saving the file, reload the rules:
+Then reload:
 ```bash
 sudo udevadm control --reload-rules
 sudo udevadm trigger
 ```
 
-You will also need to install the associated system dependencies to enable the webview-based screens. 
-
-On Debian/Ubuntu based systems:
+Install associated webview dependencies:
 ```bash
+# Debian/Ubuntu
 sudo apt install libwebkit2gtk-4.1-dev libcairo2-dev
 ```
 
 #### Windows / macOS
-Native Instruments installs background services to manage their hardware. These services will likely claim the Maschine Mk3, preventing this application from connecting to it.
-Before running this software, you will probably need to terminate or disable these background processes (e.g., `NIHardwareHelper.exe`, `NIHostIntegrationAgent.exe`, or `NIHardwareAgent` depending on your OS) via the Task Manager (Windows) or Activity Monitor (macOS) to avoid USB conflicts.
+Native Instruments background services (e.g., `NIHardwareHelper.exe`, `NIHostIntegrationAgent.exe`) may claim the USB interface. Terminate or disable these processes before launching Embit.
 
-Follow these steps to get the controller working with your setup.
+---
 
-### 1. Install the Bitwig Extension Script
-The bridge script `encdr-maschine-mk3.control.js` acts as an OSC server within Bitwig.
-You must copy this script into your Bitwig Controller Scripts directory.
+### Step-by-Step Installation
 
-On Linux / macOS:
+#### 1. Install the Bitwig Extension Script
+Copy `bitwig-extension/encdr-maschine-mk3.control.js` into your Bitwig Controller Scripts directory:
+
+*Linux / macOS:*
 ```bash
 cp bitwig-extension/encdr-maschine-mk3.control.js "$HOME/Bitwig Studio/Controller Scripts/"
-# Or alternatively into your Extensions folder:
-# cp bitwig-extension/encdr-maschine-mk3.control.js "$HOME/Bitwig Studio/Extensions/"
 ```
 
-On Windows, the paths are typically:
-- `C:\Users\<YourUsername>\Documents\Bitwig Studio\Controller Scripts\`
-- `C:\Users\<YourUsername>\Documents\Bitwig Studio\Extensions\`
+*Windows:*
+`%USERPROFILE%\Documents\Bitwig Studio\Controller Scripts\`
 
-### 2. Enable the Controller in Bitwig
+#### 2. Enable Controller in Bitwig
 1. Open Bitwig Studio.
 2. Go to **Settings > Controllers**.
 3. Click **Add controller manually**.
-4. Select **Rufus** -> **Maschine Mk3 (OSC)** from the dropdown menus.
-5. Set its MIDI input/output to any virtual or dummy port (the script relies purely on OSC and does not use traditional MIDI, but Bitwig requires ports to be assigned to enable the controller).
+4. Select **Rufus** -> **Maschine Mk3 (OSC)**.
+5. Set MIDI in/out ports to any virtual/dummy port (communication is handled via OSC UDP).
 
-### 3. Run the Rust Backend Application
-Ensure your Maschine Mk3 is plugged in and powered on. Start the Rust application to connect to the hardware and Bitwig:
+#### 3. Run the Rust Backend
 ```bash
-cd machine-bitwig
-cargo run
+cargo run --release
 ```
-You should see "Connected to NI Maschine Mk3" in the terminal, and the screens on the hardware should light up!
 
-#### Desktop Screen Mirroring / Preview
-To mirror the dual screens in a desktop window (useful for development and streaming):
+#### Desktop Screen Preview
+To mirror dual screens in a desktop window:
 ```bash
-# Pass --visible to the application via cargo's argument separator:
-cargo run -- --visible
-
-# Or using the cargo alias:
+cargo run --release -- --visible
+# or:
 cargo preview
-# or: cargo run-visible
-
-# Or via environment variable:
-VISIBLE=1 cargo run
 ```
+
+---
 
 ## License
 
-This project is licensed under the [GNU General Public License v3.0](LICENSE).
+Embit (Community Edition) is licensed under the [GNU General Public License v3.0](LICENSE).

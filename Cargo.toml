@@ -1,12 +1,13 @@
 [package]
-name = "machine-bitwig"
+name = "embit"
 version = "0.2.0"
 edition = "2024"
+description = "Embit: Open-source dual-display Maschine Mk3 controller engine for Bitwig Studio"
 
 [dependencies]
 crossbeam-channel = "0.5.16"
-encdr = { version = "0.7.7", path = "../Encdr/encdr" }
-encdr-view = { version = "0.7.7", path = "../Encdr/encdr-view" }
+encdr = { version = "0.8.0", path = "../Encdr/encdr" }
+encdr-view = { version = "0.8.0", path = "../Encdr/encdr-view" }
 rosc = "0.11.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.151"
